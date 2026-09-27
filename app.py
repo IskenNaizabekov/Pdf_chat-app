@@ -10,7 +10,7 @@ from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 
-# Настройка страницы
+# Настройка интерфейса Streamlit
 st.set_page_config(
     page_title="DocAI Assistant",
     page_icon="📄",
@@ -25,7 +25,7 @@ st.divider()
 api_key = st.secrets.get("GOOGLE_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 
 if not api_key:
-    st.error("API Key is missing. Пожалуйста, укажите GOOGLE_API_KEY в Secrets.")
+    st.error("API Key не найден. Пожалуйста, укажите GOOGLE_API_KEY в Secrets.")
     st.stop()
 
 os.environ["GOOGLE_API_KEY"] = api_key
@@ -40,25 +40,25 @@ if uploaded_file is not None:
             tmp_file.write(uploaded_file.getvalue())
             tmp_path = tmp_file.name
 
-        st.success("Документ загружен!")
+        st.success("Документ успешно загружен!")
 
         # 1. Загрузка текста из PDF
         loader = PyPDFLoader(tmp_path)
         docs = loader.load()
 
-        # Удаляем временный файл
+        # Удаление временного файла после чтения
         os.remove(tmp_path)
 
-        # 2. Разделение текста на чанки
+        # 2. Разделение текста на фрагменты (чанки)
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(docs)
 
-        # 3. Векторное хранилище в памяти
+        # 3. Векторное хранилище в памяти без внешних зависимостей C/C++
         embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
         vectorstore = InMemoryVectorStore.from_documents(documents=splits, embedding=embeddings)
         retriever = vectorstore.as_retriever()
 
-        # 4. Настройка генеративной модели и Промпта
+        # 4. Настройка языковой модели Gemini и промпта
         llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3)
 
         system_prompt = (
@@ -73,11 +73,11 @@ if uploaded_file is not None:
             ("human", "{input}"),
         ])
 
-        # 5. Создание RAG цепи
+        # 5. Сборка RAG-цепи
         question_answer_chain = create_stuff_documents_chain(llm, prompt)
         rag_chain = create_retrieval_chain(retriever, question_answer_chain)
 
-        # Чат-интерфейс
+        # Интерактивный вопрос-ответ
         st.divider()
         user_query = st.text_input("Задайте вопрос по документу:")
 
@@ -88,4 +88,4 @@ if uploaded_file is not None:
                 st.write(response["answer"])
 
     except Exception as e:
-        st.error(f"Ошибка: {e}")
+        st.error(f"Произошла ошибка: {e}")
