@@ -1,8 +1,7 @@
 import os
-import tempfile
 import streamlit as st
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage
+from pypdf import PdfReader
+from google import genai
 
 # Настройка страницы
 st.set_page_config(
@@ -22,46 +21,46 @@ if not api_key:
     st.error("API Key не найден. Пожалуйста, укажите GOOGLE_API_KEY в Secrets.")
     st.stop()
 
-os.environ["GOOGLE_API_KEY"] = api_key
+# Инициализация официального клиента Google GenAI
+client = genai.Client(api_key=api_key)
 
 # Загрузка PDF файла
 uploaded_file = st.file_uploader("Загрузите PDF документ", type=["pdf"])
 
 if uploaded_file is not None:
     try:
-        pdf_bytes = uploaded_file.getvalue()
-        st.success("Документ успешно загружен!")
+        # Извлекаем весь текст напрямую из PDF
+        reader = PdfReader(uploaded_file)
+        document_text = ""
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                document_text += text + "\n"
 
-        # Инициализация модели Gemini
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
-            temperature=0.3
-        )
+        st.success("Документ успешно загружен и прочитан!")
 
         st.divider()
         user_query = st.text_input("Задайте вопрос по документу:")
 
         if user_query:
             with st.spinner("Анализирую документ..."):
-                # Передаем PDF-файл напрямую в модель Gemini как медиа-данные
-                message = HumanMessage(
-                    content=[
-                        {
-                            "type": "text",
-                            "text": f"Проанализируй документ и ответь на вопрос: {user_query}"
-                        },
-                        {
-                            "type": "media",
-                            "mime_type": "application/pdf",
-                            "data": pdf_bytes
-                        }
-                    ]
+                # Формируем простой промпт с текстом документа
+                prompt = f"""Вы — ассистент по анализу документов. Ответь на вопрос пользователя, используя только следующий текст документа.
+
+Текст документа:
+{document_text}
+
+Вопрос: {user_query}
+Ответ:"""
+
+                # Вызываем генерацию через актуальный клиент
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=prompt
                 )
-                
-                response = llm.invoke([message])
-                
+
                 st.write("### Ответ:")
-                st.write(response.content)
+                st.write(response.text)
 
     except Exception as e:
         st.error(f"Произошла ошибка: {e}")
