@@ -1,89 +1,74 @@
+import os
 import streamlit as st
 from google import genai
-import tempfile
-import os
 
 st.set_page_config(
-    page_title="PDF Помощник",
-    page_icon="📘"
+    page_title="PDF Учитель",
+    page_icon="📚"
 )
 
-st.title("📘 PDF Помощник")
-st.write("Загрузите PDF и задайте вопрос.")
+st.title("📚 PDF Учитель")
+st.write("Загрузи учебник или другой PDF и задай вопрос.")
 
-if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("API-ключ не найден.")
+api_key = os.getenv("GOOGLE_API_KEY")
+
+if not api_key:
+    st.error("Не найден GOOGLE_API_KEY")
     st.stop()
 
-client = genai.Client(
-    api_key=st.secrets["GOOGLE_API_KEY"]
-)
+client = genai.Client(api_key=api_key)
 
 pdf = st.file_uploader(
-    "Выберите PDF-файл",
+    "📄 Загрузить PDF",
     type=["pdf"]
 )
 
 if pdf:
+    st.success(f"Файл загружен: {pdf.name}")
 
-    if "pdf_file" not in st.session_state:
+    if "uploaded_file" not in st.session_state:
+        with st.spinner("Анализирую PDF..."):
+            temp_path = "uploaded_document.pdf"
 
-        with st.spinner("Загрузка PDF..."):
+            with open(temp_path, "wb") as f:
+                f.write(pdf.getvalue())
 
-            with tempfile.NamedTemporaryFile(
-                delete=False,
-                suffix=".pdf"
-            ) as file:
+            st.session_state.uploaded_file = client.files.upload(
+                file=temp_path
+            )
 
-                file.write(pdf.getvalue())
-                path = file.name
+        st.success("PDF готов к вопросам!")
 
-            try:
-                st.session_state.pdf_file = client.files.upload(
-                    file=path
-                )
-            finally:
-                os.remove(path)
+    question = st.text_input(
+        "❓ Твой вопрос",
+        placeholder="Например: Что говорится в документе о системе образования?"
+    )
 
-        st.success("PDF загружен.")
-
-    question = st.text_input("Ваш вопрос")
-
-    if st.button("Получить ответ"):
-
-        if not question:
-            st.warning("Введите вопрос.")
-            st.stop()
+    if st.button("Получить ответ") and question:
 
         prompt = f"""
-Ответь на вопрос, используя загруженный PDF.
+Ты помощник по учебным документам.
 
-Используй только информацию из документа.
-Не придумывай информацию.
-Отвечай понятно на русском языке.
-Если ответа нет в документе, скажи об этом.
+Отвечай на русском языке.
+
+Используй только информацию из загруженного PDF.
 
 Вопрос:
 {question}
+
+Дай понятный и краткий ответ.
+Если возможно, укажи страницу, где найдена информация.
+Если ответа в документе нет, честно скажи об этом.
 """
 
-        with st.spinner("Ищу ответ..."):
+        with st.spinner("Ищу ответ в документе..."):
+            response = client.models.generate_content(
+                model="gemini-3.8-flash",
+                contents=[
+                    prompt,
+                    st.session_state.uploaded_file
+                ]
+            )
 
-            try:
-                response = client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=[
-                        prompt,
-                        st.session_state.pdf_file
-                    ]
-                )
-
-                st.subheader("Ответ")
-                st.write(response.text)
-
-            except Exception as e:
-                st.error("Ошибка при обработке PDF.")
-                st.code(str(e))
-
-else:
-    st.info("Загрузите PDF-файл.")
+        st.subheader("💬 Ответ")
+        st.write(response.text)
