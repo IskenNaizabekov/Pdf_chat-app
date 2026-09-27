@@ -4,7 +4,7 @@ import streamlit as st
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import DocArrayInMemorySearch
+from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain.chains import create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
@@ -53,9 +53,9 @@ if uploaded_file is not None:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(docs)
 
-        # 3. Векторное хранилище в памяти (не требует сторонних C-библиотек)
+        # 3. Векторное хранилище прямо в оперативной памяти (без внешних зависимостей)
         embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
-        vectorstore = DocArrayInMemorySearch.from_documents(documents=splits, embedding=embeddings)
+        vectorstore = InMemoryVectorStore.from_documents(documents=splits, embedding=embeddings)
         retriever = vectorstore.as_retriever()
 
         # 4. Настройка генеративной модели и Промпта
