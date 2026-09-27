@@ -3,11 +3,11 @@ import streamlit as st
 from google import genai
 
 st.set_page_config(
-    page_title="PDF Учитель",
+    page_title="PDF Нурбол",
     page_icon="📚"
 )
 
-st.title("📚 PDF Учитель")
+st.title("📚 PDF Нурбол")
 st.write("Загрузи учебник или другой PDF и задай вопрос.")
 
 api_key = os.getenv("GOOGLE_API_KEY")
@@ -49,7 +49,7 @@ if pdf:
         prompt = f"""
 Ты помощник по учебным документам.
 
-Отвечай на языке на котором был запрос .
+Отвечай на языке на котором был введен запрос .
 
 Используй только информацию из загруженного PDF.
 
