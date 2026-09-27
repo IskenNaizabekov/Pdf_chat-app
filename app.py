@@ -9,83 +9,81 @@ st.set_page_config(
 )
 
 st.title("📘 PDF Помощник")
-st.write("Загрузите PDF и задайте вопрос по документу.")
+st.write("Загрузите PDF и задайте вопрос.")
 
-try:
-    api_key = st.secrets["GOOGLE_API_KEY"]
-    client = genai.Client(api_key=api_key)
-except:
-    st.error("Не найден API-ключ.")
+if "GOOGLE_API_KEY" not in st.secrets:
+    st.error("API-ключ не найден.")
     st.stop()
+
+client = genai.Client(
+    api_key=st.secrets["GOOGLE_API_KEY"]
+)
 
 pdf = st.file_uploader(
     "Выберите PDF-файл",
-    type="pdf"
+    type=["pdf"]
 )
 
 if pdf:
 
-    if "file_name" not in st.session_state or \
-       st.session_state.file_name != pdf.name:
+    if "pdf_file" not in st.session_state:
 
-        with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=".pdf"
-        ) as file:
+        with st.spinner("Загрузка PDF..."):
 
-            file.write(pdf.getvalue())
-            file_path = file.name
+            with tempfile.NamedTemporaryFile(
+                delete=False,
+                suffix=".pdf"
+            ) as file:
 
-        try:
-            st.session_state.pdf_file = client.files.upload(
-                file=file_path
-            )
-            st.session_state.file_name = pdf.name
+                file.write(pdf.getvalue())
+                path = file.name
 
-        finally:
-            os.remove(file_path)
+            try:
+                st.session_state.pdf_file = client.files.upload(
+                    file=path
+                )
+            finally:
+                os.remove(path)
 
         st.success("PDF загружен.")
 
-    question = st.text_input(
-        "Ваш вопрос:"
-    )
+    question = st.text_input("Ваш вопрос")
 
     if st.button("Получить ответ"):
 
-        if question:
+        if not question:
+            st.warning("Введите вопрос.")
+            st.stop()
 
-            prompt = f"""
-Ответь на вопрос по содержанию загруженного PDF.
+        prompt = f"""
+Ответь на вопрос, используя загруженный PDF.
 
 Используй только информацию из документа.
 Не придумывай информацию.
-Отвечай понятно и на русском языке.
-Если ответа в документе нет, так и напиши.
+Отвечай понятно на русском языке.
+Если ответа нет в документе, скажи об этом.
 
 Вопрос:
 {question}
 """
 
-            with st.spinner("Ищу ответ..."):
+        with st.spinner("Ищу ответ..."):
 
-                try:
-                    answer = client.models.generate_content(
-                        model="gemini-2.5-flash",
-                        contents=[
-                            prompt,
-                            st.session_state.pdf_file
-                        ]
-                    )
+            try:
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=[
+                        prompt,
+                        st.session_state.pdf_file
+                    ]
+                )
 
-                    st.subheader("Ответ")
-                    st.write(answer.text)
+                st.subheader("Ответ")
+                st.write(response.text)
 
-                except Exception as error:
-                    st.error(f"Ошибка: {error}")
-
-        else:
-            st.warning("Введите вопрос.")
+            except Exception as e:
+                st.error("Ошибка при обработке PDF.")
+                st.code(str(e))
 
 else:
-    st.info("Сначала загрузите PDF.")
+    st.info("Загрузите PDF-файл.")
