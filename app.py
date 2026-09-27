@@ -1,62 +1,74 @@
 import os
-import tempfile
 import streamlit as st
 from google import genai
 
-# Настройка страницы
 st.set_page_config(
-    page_title="DocAI Assistant",
-    page_icon="📄",
-    layout="wide"
+    page_title="PDF Учитель",
+    page_icon="📚"
 )
 
-st.title("📄 DocAI Assistant")
-st.caption("Анализ документов с помощью искусственного интеллекта")
-st.divider()
+st.title("📚 PDF Учитель")
+st.write("Загрузи учебник или другой PDF и задай вопрос.")
 
-# Получение API ключа
-api_key = st.secrets.get("GOOGLE_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+api_key = os.getenv("GOOGLE_API_KEY")
 
 if not api_key:
-    st.error("API Key не найден. Пожалуйста, укажите GOOGLE_API_KEY в Secrets.")
+    st.error("Не найден GOOGLE_API_KEY")
     st.stop()
 
-# Инициализация нового клиента Google GenAI
 client = genai.Client(api_key=api_key)
 
-# Загрузка PDF файла
-uploaded_file = st.file_uploader("Загрузите PDF документ", type=["pdf"])
+pdf = st.file_uploader(
+    "📄 Загрузить PDF",
+    type=["pdf"]
+)
 
-if uploaded_file is not None:
-    # Сохраняем временный файл
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-        tmp_file.write(uploaded_file.getvalue())
-        tmp_path = tmp_file.name
+if pdf:
+    st.success(f"Файл загружен: {pdf.name}")
 
-    try:
-        st.success("Документ успешно загружен!")
-        st.divider()
-        user_query = st.text_input("Задайте любой вопрос по документу:")
+    if "uploaded_file" not in st.session_state:
+        with st.spinner("Анализирую PDF..."):
+            temp_path = "uploaded_document.pdf"
 
-        if user_query:
-            with st.spinner("ИИ обрабатывает документ..."):
-                # Загружаем файл через новый SDK
-                google_file = client.files.upload(file=tmp_path)
-                
-                # Отправляем запрос
-                response = client.models.generate_content(
-                    model="gemini-1.5-flash",
-                    contents=[google_file, user_query]
-                )
+            with open(temp_path, "wb") as f:
+                f.write(pdf.getvalue())
 
-                st.write("### Ответ:")
-                st.write(response.text)
+            st.session_state.uploaded_file = client.files.upload(
+                file=temp_path
+            )
 
-                # Удаляем файл с серверов
-                client.files.delete(name=google_file.name)
+        st.success("PDF готов к вопросам!")
 
-    except Exception as e:
-        st.error(f"Произошла ошибка при обработке: {e}")
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+    question = st.text_input(
+        "❓ Твой вопрос",
+        placeholder="Например: Что говорится в документе о системе образования?"
+    )
+
+    if st.button("Получить ответ") and question:
+
+        prompt = f"""
+Ты помощник по учебным документам.
+
+Отвечай на русском языке.
+
+Используй только информацию из загруженного PDF.
+
+Вопрос:
+{question}
+
+Дай понятный и краткий ответ.
+Если возможно, укажи страницу, где найдена информация.
+Если ответа в документе нет, честно скажи об этом.
+"""
+
+        with st.spinner("Ищу ответ в документе..."):
+            response = client.models.generate_content(
+                model="gemini-3.8-flash",
+                contents=[
+                    prompt,
+                    st.session_state.uploaded_file
+                ]
+            )
+
+        st.subheader("💬 Ответ")
+        st.write(response.text)
