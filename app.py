@@ -53,9 +53,9 @@ if uploaded_file is not None:
 Вопрос: {user_query}
 Ответ:"""
 
-                # Вызываем генерацию через актуальный клиент
+                # Вызываем генерацию через доступную модель gemini-2.0-flash
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-2.0-flash",
                     contents=prompt
                 )
 
