@@ -88,5 +88,5 @@ if pdf:
                 st.write(response.text)
 
             except Exception as e:
-                st.error("Не удалось получить ответ от Gemini.")
+                st.error("Не удалось получить ответ от ChatGPT.")
                 st.code(str(e))
