@@ -1,6 +1,6 @@
 import os
+import tempfile
 import streamlit as st
-from pypdf import PdfReader
 import google.generativeai as genai
 
 # Настройка страницы
@@ -21,66 +21,43 @@ if not api_key:
     st.error("API Key не найден. Пожалуйста, укажите GOOGLE_API_KEY в Secrets.")
     st.stop()
 
-# Настройка клиента
+# Инициализация API
 genai.configure(api_key=api_key)
-
-# Функция поиска рабочей модели
-def get_active_model_name():
-    try:
-        models = [
-            m.name for m in genai.list_models()
-            if "generateContent" in m.supported_generation_methods
-        ]
-        # Приоритетные имена моделей
-        for preferred in ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]:
-            for m in models:
-                if preferred in m:
-                    return m
-        if models:
-            return models[0]
-    except Exception:
-        pass
-    return "models/gemini-1.5-flash"
 
 # Загрузка PDF файла
 uploaded_file = st.file_uploader("Загрузите PDF документ", type=["pdf"])
 
 if uploaded_file is not None:
+    # Сохраняем временный файл для отправки в Google File API
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        tmp_file.write(uploaded_file.getvalue())
+        tmp_path = tmp_file.name
+
     try:
-        # Извлекаем текст из PDF
-        reader = PdfReader(uploaded_file)
-        document_text = ""
-        for page in reader.pages:
-            text = page.extract_text()
-            if text:
-                document_text += text + "\n"
-
-        if not document_text.strip():
-            st.warning("Не удалось извлечь текст из PDF (возможно, это сканированный документ).")
-            st.stop()
-
-        st.success("Документ успешно загружен и прочитан!")
-
+        st.success("Документ успешно загружен!")
         st.divider()
         user_query = st.text_input("Задайте любой вопрос по документу:")
 
         if user_query:
-            with st.spinner("Обрабатываю документ..."):
-                model_name = get_active_model_name()
+            with st.spinner("ИИ обрабатывает документ..."):
+                # Загружаем PDF напрямую на серверы Google
+                google_file = genai.upload_file(tmp_path, mime_type="application/pdf")
                 
-                prompt = f"""Вы — ассистент по анализу документов. Ответь на вопрос пользователя, используя только следующий текст документа.
-
-Текст документа:
-{document_text}
-
-Вопрос: {user_query}
-Ответ:"""
-
-                model = genai.GenerativeModel(model_name)
-                response = model.generate_content(prompt)
+                # Используем стандартную модель gemini-1.5-flash
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                
+                # Отправляем файл и вопрос
+                response = model.generate_content([google_file, user_query])
 
                 st.write("### Ответ:")
                 st.write(response.text)
 
+                # Удаляем временный файл с серверов Google
+                genai.delete_file(google_file.name)
+
     except Exception as e:
         st.error(f"Произошла ошибка при обработке: {e}")
+    finally:
+        # Удаляем локальный временный файл
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
