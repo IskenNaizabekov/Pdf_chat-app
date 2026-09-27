@@ -1,7 +1,7 @@
 import os
 import tempfile
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 
 # Настройка страницы
 st.set_page_config(
@@ -21,14 +21,14 @@ if not api_key:
     st.error("API Key не найден. Пожалуйста, укажите GOOGLE_API_KEY в Secrets.")
     st.stop()
 
-# Инициализация API
-genai.configure(api_key=api_key)
+# Инициализация нового клиента Google GenAI
+client = genai.Client(api_key=api_key)
 
 # Загрузка PDF файла
 uploaded_file = st.file_uploader("Загрузите PDF документ", type=["pdf"])
 
 if uploaded_file is not None:
-    # Сохраняем временный файл для отправки в Google File API
+    # Сохраняем временный файл
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         tmp_file.write(uploaded_file.getvalue())
         tmp_path = tmp_file.name
@@ -40,24 +40,23 @@ if uploaded_file is not None:
 
         if user_query:
             with st.spinner("ИИ обрабатывает документ..."):
-                # Загружаем PDF напрямую на серверы Google
-                google_file = genai.upload_file(tmp_path, mime_type="application/pdf")
+                # Загружаем файл через новый SDK
+                google_file = client.files.upload(file=tmp_path)
                 
-                # Используем стандартную модель gemini-1.5-flash
-                model = genai.GenerativeModel("gemini-1.5-flash")
-                
-                # Отправляем файл и вопрос
-                response = model.generate_content([google_file, user_query])
+                # Отправляем запрос
+                response = client.models.generate_content(
+                    model="gemini-1.5-flash",
+                    contents=[google_file, user_query]
+                )
 
                 st.write("### Ответ:")
                 st.write(response.text)
 
-                # Удаляем временный файл с серверов Google
-                genai.delete_file(google_file.name)
+                # Удаляем файл с серверов
+                client.files.delete(name=google_file.name)
 
     except Exception as e:
         st.error(f"Произошла ошибка при обработке: {e}")
     finally:
-        # Удаляем локальный временный файл
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
