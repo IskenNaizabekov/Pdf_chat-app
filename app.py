@@ -53,8 +53,8 @@ if uploaded_file is not None:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(docs)
 
-        # 3. Создание векторного хранилища (ChromaDB) с рабочей моделью эмбеддингов
-        embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+        # 3. Создание векторного хранилища (ChromaDB) с актуальной моделью gemini-embedding-001
+        embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
         vectorstore = Chroma.from_documents(documents=splits, embedding=embeddings)
         retriever = vectorstore.as_retriever()
 
