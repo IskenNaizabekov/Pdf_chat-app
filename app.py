@@ -10,7 +10,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
 
-# Настройка страницы
+# Настройка страницы Streamlit
 st.set_page_config(
     page_title="DocAI Assistant",
     page_icon="📄",
@@ -46,20 +46,24 @@ if uploaded_file is not None:
         loader = PyPDFLoader(tmp_path)
         docs = loader.load()
 
-        # Удаление временного файла
+        # Удаление временного файла после чтения
         os.remove(tmp_path)
 
         # 2. Разделение текста на чанки
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(docs)
 
-        # 3. Векторное хранилище в память
-        embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+        # 3. Векторное хранилище в оперативной памяти
+        embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
         vectorstore = InMemoryVectorStore.from_documents(documents=splits, embedding=embeddings)
         retriever = vectorstore.as_retriever()
 
-        # 4. Модель и промпт
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3)
+        # 4. Модель Gemini с явным вызовом v1beta
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-1.5-flash", 
+            temperature=0.3,
+            client_options=None
+        )
 
         template = """Вы — ассистент по анализу документов. Используйте следующий контекст, чтобы ответить на вопрос пользователя. Если ответа нет в контексте, честно скажите, что не знаете.
 
@@ -71,11 +75,11 @@ if uploaded_file is not None:
 
         prompt = ChatPromptTemplate.from_template(template)
 
-        # Функция для форматирования найденных документов в один текст
+        # Функция форматирования текста из фрагментов
         def format_docs(docs_list):
             return "\n\n".join(doc.page_content for doc in docs_list)
 
-        # 5. Чистая RAG-цепочка без сложных зашитых функций
+        # 5. Сборка RAG-цепи через LCEL
         rag_chain = (
             {"context": retriever | format_docs, "question": RunnablePassthrough()}
             | prompt
@@ -83,7 +87,7 @@ if uploaded_file is not None:
             | StrOutputParser()
         )
 
-        # Чат-интерфейс
+        # Интерфейс вопросов и ответов
         st.divider()
         user_query = st.text_input("Задайте вопрос по документу:")
 
