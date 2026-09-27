@@ -1,4 +1,5 @@
 import os
+import time
 import streamlit as st
 from google import genai
 
@@ -10,72 +11,95 @@ st.set_page_config(
 st.title("📚 PDF Учитель")
 st.write("Загрузи PDF и задай вопрос по документу.")
 
+# API ключ
 api_key = os.getenv("GOOGLE_API_KEY")
 
 if not api_key:
-    st.error("Не найден GOOGLE_API_KEY")
+    try:
+        api_key = st.secrets["GOOGLE_API_KEY"]
+    except Exception:
+        api_key = None
+
+if not api_key:
+    st.error("⚠️ API ключ не настроен.")
     st.stop()
 
 client = genai.Client(api_key=api_key)
 
+# Загрузка PDF
 pdf = st.file_uploader(
     "📄 Загрузить PDF",
     type=["pdf"]
 )
 
 if pdf:
+
     st.success(f"Файл загружен: {pdf.name}")
 
-    if "uploaded_file" not in st.session_state:
-        with st.spinner("Анализирую PDF..."):
+    # Загружаем PDF только один раз
+    if (
+        "uploaded_file" not in st.session_state
+        or st.session_state.get("file_name") != pdf.name
+    ):
+
+        with st.spinner("📖 Анализирую PDF..."):
+
             try:
                 temp_path = "uploaded_document.pdf"
 
                 with open(temp_path, "wb") as f:
                     f.write(pdf.getvalue())
 
-                st.session_state.uploaded_file = client.files.upload(
+                uploaded_file = client.files.upload(
                     file=temp_path
                 )
 
+                st.session_state.uploaded_file = uploaded_file
+                st.session_state.file_name = pdf.name
+
             except Exception as e:
-                st.error("Не удалось загрузить PDF.")
-                st.code(str(e))
+                st.error("❌ Не удалось загрузить PDF.")
                 st.stop()
 
-        st.success("PDF готов к вопросам!")
+        st.success("✅ PDF готов к вопросам!")
 
+    # Вопрос
     question = st.text_input(
         "❓ Твой вопрос",
-        placeholder="Например: Что говорится в документе о системе образования?"
+        placeholder="Например: Объясни содержание этого документа"
     )
 
     if st.button("Получить ответ") and question:
 
         prompt = f"""
-Ты помощник по учебным документам.
+Ты — помощник по учебным документам.
 
-Определи язык вопроса пользователя.
+Пользователь задаёт вопрос по загруженному PDF.
 
-Отвечай на том же языке, на котором задан вопрос:
-- русский вопрос → русский ответ
-- кыргызский вопрос → кыргызский ответ
-- английский вопрос → английский ответ
+Определи язык вопроса.
+
+Если вопрос на русском — отвечай на русском.
+Если вопрос на кыргызском — отвечай на кыргызском.
+Если вопрос на английском — отвечай на английском.
 
 Используй только информацию из загруженного PDF.
 
-Вопрос:
+Не придумывай информацию, которой нет в документе.
+
+Отвечай понятно и простым языком.
+
+Если возможно, укажи страницу, где находится ответ.
+
+Если ответа в документе нет, честно сообщи об этом.
+
+Вопрос пользователя:
 {question}
-
-Дай понятный и краткий ответ.
-
-Если возможно, укажи страницу, где найдена информация.
-
-Если ответа в PDF нет, честно скажи об этом.
 """
 
-        with st.spinner("Ищу ответ в документе..."):
+        with st.spinner("🤖 Ищу ответ в документе..."):
+
             try:
+
                 response = client.models.generate_content(
                     model="gemini-3.8-flash",
                     contents=[
@@ -88,5 +112,18 @@ if pdf:
                 st.write(response.text)
 
             except Exception as e:
-                st.error("Не удалось получить ответ от ChatGPT.")
-                st.code(str(e))
+
+                error_text = str(e)
+
+                if "429" in error_text or "RESOURCE_EXHAUSTED" in error_text:
+
+                    st.warning(
+                        "⏳ Сейчас AI перегружен или достигнут лимит запросов. "
+                        "Попробуйте повторить запрос через некоторое время."
+                    )
+
+                else:
+
+                    st.error(
+                        "❌ Не удалось получить ответ от AI."
+                    )
