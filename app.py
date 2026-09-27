@@ -53,16 +53,15 @@ if uploaded_file is not None:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(docs)
 
-        # 3. Векторное хранилище в оперативной памяти
-        embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+        # 3. Векторное хранилище с актуальной моделью эмбеддингов
+        embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
         vectorstore = InMemoryVectorStore.from_documents(documents=splits, embedding=embeddings)
         retriever = vectorstore.as_retriever()
 
-        # 4. Модель Gemini с явным вызовом v1beta
+        # 4. Основная модель Gemini
         llm = ChatGoogleGenerativeAI(
             model="gemini-1.5-flash", 
-            temperature=0.3,
-            client_options=None
+            temperature=0.3
         )
 
         template = """Вы — ассистент по анализу документов. Используйте следующий контекст, чтобы ответить на вопрос пользователя. Если ответа нет в контексте, честно скажите, что не знаете.
