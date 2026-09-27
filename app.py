@@ -8,7 +8,7 @@ st.set_page_config(
 )
 
 st.title("📚 PDF Учитель")
-st.write("Загрузи учебник или другой PDF и задай вопрос.")
+st.write("Загрузи PDF и задай вопрос по документу.")
 
 api_key = os.getenv("GOOGLE_API_KEY")
 
@@ -28,14 +28,20 @@ if pdf:
 
     if "uploaded_file" not in st.session_state:
         with st.spinner("Анализирую PDF..."):
-            temp_path = "uploaded_document.pdf"
+            try:
+                temp_path = "uploaded_document.pdf"
 
-            with open(temp_path, "wb") as f:
-                f.write(pdf.getvalue())
+                with open(temp_path, "wb") as f:
+                    f.write(pdf.getvalue())
 
-            st.session_state.uploaded_file = client.files.upload(
-                file=temp_path
-            )
+                st.session_state.uploaded_file = client.files.upload(
+                    file=temp_path
+                )
+
+            except Exception as e:
+                st.error("Не удалось загрузить PDF.")
+                st.code(str(e))
+                st.stop()
 
         st.success("PDF готов к вопросам!")
 
@@ -49,7 +55,12 @@ if pdf:
         prompt = f"""
 Ты помощник по учебным документам.
 
-Отвечай на русском языке.
+Определи язык вопроса пользователя.
+
+Отвечай на том же языке, на котором задан вопрос:
+- русский вопрос → русский ответ
+- кыргызский вопрос → кыргызский ответ
+- английский вопрос → английский ответ
 
 Используй только информацию из загруженного PDF.
 
@@ -57,18 +68,25 @@ if pdf:
 {question}
 
 Дай понятный и краткий ответ.
+
 Если возможно, укажи страницу, где найдена информация.
-Если ответа в документе нет, честно скажи об этом.
+
+Если ответа в PDF нет, честно скажи об этом.
 """
 
         with st.spinner("Ищу ответ в документе..."):
-            response = client.models.generate_content(
-                model="gemini-3.8-flash",
-                contents=[
-                    prompt,
-                    st.session_state.uploaded_file
-                ]
-            )
+            try:
+                response = client.models.generate_content(
+                    model="gemini-3.8-flash",
+                    contents=[
+                        prompt,
+                        st.session_state.uploaded_file
+                    ]
+                )
 
-        st.subheader("💬 Ответ")
-        st.write(response.text)
+                st.subheader("💬 Ответ")
+                st.write(response.text)
+
+            except Exception as e:
+                st.error("Не удалось получить ответ от Gemini.")
+                st.code(str(e))
