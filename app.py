@@ -1,7 +1,7 @@
 import os
 import streamlit as st
 from pypdf import PdfReader
-from google import genai
+import google.generativeai as genai
 
 # Настройка страницы
 st.set_page_config(
@@ -21,21 +21,25 @@ if not api_key:
     st.error("API Key не найден. Пожалуйста, укажите GOOGLE_API_KEY в Secrets.")
     st.stop()
 
-# Инициализация официального клиента Google GenAI
-client = genai.Client(api_key=api_key)
+# Настройка клиента Google AI
+genai.configure(api_key=api_key)
 
 # Загрузка PDF файла
 uploaded_file = st.file_uploader("Загрузите PDF документ", type=["pdf"])
 
 if uploaded_file is not None:
     try:
-        # Извлекаем весь текст напрямую из PDF
+        # Извлекаем текст напрямую из PDF
         reader = PdfReader(uploaded_file)
         document_text = ""
         for page in reader.pages:
             text = page.extract_text()
             if text:
                 document_text += text + "\n"
+
+        if not document_text.strip():
+            st.warning("Не удалось извлечь текст из PDF (возможно, это сканированный документ-картинка).")
+            st.stop()
 
         st.success("Документ успешно загружен и прочитан!")
 
@@ -44,7 +48,6 @@ if uploaded_file is not None:
 
         if user_query:
             with st.spinner("Анализирую документ..."):
-                # Формируем простой промпт с текстом документа
                 prompt = f"""Вы — ассистент по анализу документов. Ответь на вопрос пользователя, используя только следующий текст документа.
 
 Текст документа:
@@ -53,11 +56,9 @@ if uploaded_file is not None:
 Вопрос: {user_query}
 Ответ:"""
 
-                # Вызываем генерацию через доступную модель gemini-2.0-flash
-                response = client.models.generate_content(
-                    model="gemini-2.0-flash",
-                    contents=prompt
-                )
+                # Инициализируем рабочую модель
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                response = model.generate_content(prompt)
 
                 st.write("### Ответ:")
                 st.write(response.text)
